@@ -270,7 +270,8 @@ impl DerivedTS {
 
                 for variant in variants {
                     let value = variant.or(latest.map(|x| x + 1)).unwrap_or(0);
-                    buffer.push_str(&format!("{} | ", value));
+                    use std::fmt::Write as _;
+                    let _ = write!(buffer, "{value} | ");
 
                     latest = Some(value)
                 }
