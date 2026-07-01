@@ -118,6 +118,27 @@ struct Outer {
     #[ts(optional = nullable)]
     y: Unsupported,
 }
+#[derive(TS)]
+#[ts(export, export_to = "type_as/", as = "Flattened")]
+enum Flattening {
+    A(i32),
+    B(i32),
+    C(i32),
+}
+
+#[derive(TS)]
+struct Flattened {
+    r#type: u8,
+    value: i32,
+}
+
+#[derive(TS)]
+#[ts(export, export_to = "type_as/")]
+struct FlattenFlattening {
+    pub id: i32,
+    #[ts(flatten)]
+    pub r#type: Flattening,
+}
 
 #[test]
 fn complex() {
