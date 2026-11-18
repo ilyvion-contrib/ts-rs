@@ -425,9 +425,9 @@ dependencies = [
 
 [[package]]
 name = "either"
-version = "1.13.0"
+version = "1.16.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "60b1af1c220855b6ceac025d3f6ecdd2b7c4894bfe9cd9bda4fbb4bc7c0d4cf0"
+checksum = "91622ff5e7162018101f2fea40d6ebf4a78bbe5a49736a2020649edf9693679e"
 
 [[package]]
 name = "equivalent"
@@ -525,9 +525,9 @@ dependencies = [
 
 [[package]]
 name = "heapless"
-version = "0.8.0"
+version = "0.9.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0bfb9eb618601c89945a70e254898da93b13be0388091d42117462b265bb3fad"
+checksum = "25ba4bd83f9415b58b4ed8dc5714c76e626a105be4646c02630ad730ad3b5aa4"
 dependencies = [
  "hash32",
  "stable_deref_trait",
@@ -832,6 +832,12 @@ name = "new_debug_unreachable"
 version = "1.0.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "650eef8c711430f1a879fdd01d4745a7deea475becfb90269c06775983bbf086"
+
+[[package]]
+name = "nonempty"
+version = "0.12.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9737e026353e5cd0736f98eddae28665118eb6f6600902a7f50db585621fecb6"
 
 [[package]]
 name = "num-bigint"
@@ -1510,9 +1516,11 @@ dependencies = [
  "bytes",
  "chrono",
  "dprint-plugin-typescript",
+ "either",
  "heapless",
  "indexmap",
  "jiff",
+ "nonempty",
  "ordered-float",
  "semver",
  "serde",
