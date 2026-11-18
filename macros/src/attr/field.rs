@@ -87,7 +87,7 @@ impl Attr for FieldAttr {
         {
             syn_err_spanned!(
                 field;
-                r#"using `#[serde(with = "...")]` requires the use of `#[ts(as = "...")]` or `#[ts(type = "...")]`"#
+                r#"using `#[serde(with = "...")]` or `#[serde(serialize_with = "...")]` requires the use of `#[ts(as = "...")]` or `#[ts(type = "...")]`"#
             )
         }
 
@@ -191,7 +191,7 @@ impl_parse! {
         "borrow" => {
             parse_optional_assign_str(input)?;
         },
-        "with" => {
+        "with" | "serialize_with" => {
             parse_assign_str(input)?;
             out.0.using_serde_with = true;
         },
@@ -253,6 +253,55 @@ fn replace_underscore_in_angle_bracketed(args: &mut AngleBracketedGenericArgumen
                 }
             }
             _ => (),
+        }
+    }
+}
+
+#[cfg(all(test, feature = "serde-compat"))]
+mod tests {
+    use syn::{parse_quote, ItemStruct};
+
+    use super::*;
+
+    fn validate(item: &ItemStruct) -> Result<()> {
+        let field = item.fields.iter().next().unwrap();
+        FieldAttr::from_attrs(&field.attrs)?.assert_validity(field)
+    }
+
+    #[test]
+    fn serialize_with_requires_a_ts_override() {
+        let item: ItemStruct = parse_quote! {
+            struct A {
+                #[serde(serialize_with = "custom")]
+                a: i32,
+            }
+        };
+
+        let error = validate(&item).unwrap_err().to_string();
+        assert!(error.contains("requires the use of"), "{error}");
+    }
+
+    #[test]
+    fn serialize_with_is_accepted_with_a_ts_override() {
+        let items: [ItemStruct; 2] = [
+            parse_quote! {
+                struct A {
+                    #[serde(serialize_with = "custom")]
+                    #[ts(type = "string | null")]
+                    a: i32,
+                }
+            },
+            parse_quote! {
+                struct A {
+                    #[serde(serialize_with = "custom")]
+                    #[ts(as = "String")]
+                    a: i32,
+                }
+            },
+        ];
+
+        for item in &items {
+            validate(item).unwrap();
         }
     }
 }

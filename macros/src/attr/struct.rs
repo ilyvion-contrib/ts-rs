@@ -26,6 +26,8 @@ pub struct StructAttr {
     pub concrete: HashMap<Ident, Type>,
     pub bound: Option<Vec<WherePredicate>>,
     pub optional_fields: Optional,
+    // whether the wire format comes from another type through #[serde(from/try_from/into)]
+    pub using_serde_conversion: bool,
 }
 
 impl StructAttr {
@@ -96,10 +98,18 @@ impl Attr for StructAttr {
                 (None, None) => None,
             },
             optional_fields: self.optional_fields.or(other.optional_fields),
+            using_serde_conversion: self.using_serde_conversion || other.using_serde_conversion,
         }
     }
 
     fn assert_validity(&self, item: &Self::Item) -> Result<()> {
+        if self.using_serde_conversion && !(self.type_as.is_some() || self.type_override.is_some())
+        {
+            syn_err!(
+                r#"using `#[serde(from = "...")]`, `#[serde(try_from = "...")]` or `#[serde(into = "...")]` requires the use of `#[ts(as = "...")]` or `#[ts(type = "...")]`"#
+            );
+        }
+
         if self.type_override.is_some() {
             if self.type_as.is_some() {
                 syn_err!("`as` is not compatible with `type`");
@@ -177,6 +187,55 @@ impl_parse! {
         // parse #[serde(crate = "...")] to not emit a warning
         "crate" => {
             parse_assign_str(input)?;
+        },
+        "from" | "try_from" | "into" => {
+            parse_assign_str(input)?;
+            out.0.using_serde_conversion = true;
+        },
+    }
+}
+
+#[cfg(all(test, feature = "serde-compat"))]
+mod tests {
+    use syn::{parse_quote, ItemStruct};
+
+    use super::*;
+
+    fn validate(item: &ItemStruct) -> Result<()> {
+        StructAttr::from_attrs(&item.attrs)?.assert_validity(&item.fields)
+    }
+
+    #[test]
+    fn serde_conversions_require_a_ts_override() {
+        let items: [ItemStruct; 3] = [
+            parse_quote! { #[serde(from = "Wire")] struct A; },
+            parse_quote! { #[serde(try_from = "Wire")] struct A; },
+            parse_quote! { #[serde(into = "Wire")] struct A; },
+        ];
+
+        for item in &items {
+            let error = validate(item).unwrap_err().to_string();
+            assert!(error.contains("requires the use of"), "{error}");
+        }
+    }
+
+    #[test]
+    fn serde_conversions_are_accepted_with_a_ts_override() {
+        let items: [ItemStruct; 2] = [
+            parse_quote! {
+                #[ts(as = "Wire")]
+                #[serde(into = "Wire", try_from = "Wire")]
+                struct A;
+            },
+            parse_quote! {
+                #[ts(type = "string")]
+                #[serde(from = "Wire", into = "Wire")]
+                struct A;
+            },
+        ];
+
+        for item in &items {
+            validate(item).unwrap();
         }
     }
 }

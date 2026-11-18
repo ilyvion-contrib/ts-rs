@@ -34,6 +34,8 @@ pub struct EnumAttr {
     pub content: Option<String>,
     pub repr: Option<Repr>,
     pub optional_fields: Optional,
+    // whether the wire format comes from another type through #[serde(from/try_from/into)]
+    pub using_serde_conversion: bool,
 }
 
 #[derive(Copy, Clone)]
@@ -108,10 +110,19 @@ impl Attr for EnumAttr {
             },
             repr: self.repr.or(other.repr),
             optional_fields: self.optional_fields.or(other.optional_fields),
+            using_serde_conversion: self.using_serde_conversion || other.using_serde_conversion,
         }
     }
 
     fn assert_validity(&self, item: &Self::Item) -> Result<()> {
+        if self.using_serde_conversion && !(self.type_as.is_some() || self.type_override.is_some())
+        {
+            syn_err_spanned!(
+                item;
+                r#"using `#[serde(from = "...")]`, `#[serde(try_from = "...")]` or `#[serde(into = "...")]` requires the use of `#[ts(as = "...")]` or `#[ts(type = "...")]`"#
+            );
+        }
+
         if self.type_override.is_some() {
             if self.type_as.is_some() {
                 syn_err_spanned!(
@@ -310,6 +321,53 @@ impl_parse! {
         // parse #[serde(crate = "...")] to not emit a warning
         "crate" => {
             parse_assign_str(input)?;
+        },
+        "from" | "try_from" | "into" => {
+            parse_assign_str(input)?;
+            out.0.using_serde_conversion = true;
+        },
+    }
+}
+
+#[cfg(all(test, feature = "serde-compat"))]
+mod tests {
+    use super::*;
+
+    fn validate(item: &ItemEnum) -> Result<()> {
+        EnumAttr::from_attrs(&item.attrs)?.assert_validity(item)
+    }
+
+    #[test]
+    fn serde_conversions_require_a_ts_override() {
+        let items: [ItemEnum; 3] = [
+            parse_quote! { #[serde(from = "Wire")] enum A { B } },
+            parse_quote! { #[serde(try_from = "Wire")] enum A { B } },
+            parse_quote! { #[serde(into = "Wire")] enum A { B } },
+        ];
+
+        for item in &items {
+            let error = validate(item).unwrap_err().to_string();
+            assert!(error.contains("requires the use of"), "{error}");
+        }
+    }
+
+    #[test]
+    fn serde_conversions_are_accepted_with_a_ts_override() {
+        let items: [ItemEnum; 2] = [
+            parse_quote! {
+                #[ts(as = "Wire")]
+                #[serde(into = "Wire", try_from = "Wire")]
+                enum A { B }
+            },
+            parse_quote! {
+                #[ts(type = "string")]
+                #[serde(from = "Wire", into = "Wire")]
+                enum A { B }
+            },
+        ];
+
+        for item in &items {
+            validate(item).unwrap();
         }
     }
 }
