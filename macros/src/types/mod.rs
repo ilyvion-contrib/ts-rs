@@ -1,7 +1,7 @@
-use syn::{ext::IdentExt, Expr, Fields, ItemStruct, Result};
+use syn::{ext::IdentExt, Expr, Field, Fields, ItemStruct, Result};
 
 use crate::{
-    attr::{Attr, StructAttr},
+    attr::{Attr, FieldAttr, StructAttr},
     DerivedTS,
 };
 
@@ -37,6 +37,11 @@ fn type_def(attr: &StructAttr, ts_name: Expr, fields: &Fields) -> Result<Derived
         return type_as::type_as_struct(attr, ts_name, attr_type_as);
     }
 
+    if attr.transparent {
+        let (inner, field_attr) = transparent_field(fields)?;
+        return newtype::newtype(attr, ts_name, inner, field_attr);
+    }
+
     match fields {
         Fields::Named(named) => match named.named.len() {
             0 if attr.tag.is_none() => Ok(unit::empty_object(attr, ts_name)),
@@ -44,9 +49,32 @@ fn type_def(attr: &StructAttr, ts_name: Expr, fields: &Fields) -> Result<Derived
         },
         Fields::Unnamed(unnamed) => match unnamed.unnamed.len() {
             0 => Ok(unit::empty_array(attr, ts_name)),
-            1 => newtype::newtype(attr, ts_name, unnamed),
+            1 => {
+                let inner = unnamed.unnamed.first().unwrap();
+                newtype::newtype(attr, ts_name, inner, FieldAttr::from_attrs(&inner.attrs)?)
+            }
             _ => tuple::tuple(attr, ts_name, unnamed),
         },
         Fields::Unit => Ok(unit::null(attr, ts_name)),
+    }
+}
+
+/// Finds the single non-skipped field that a `#[serde(transparent)]` struct is serialized as.
+fn transparent_field(fields: &Fields) -> Result<(&Field, FieldAttr)> {
+    let mut found = None;
+    for field in fields {
+        let field_attr = FieldAttr::from_attrs(&field.attrs)?;
+        if field_attr.skip {
+            continue;
+        }
+        if found.is_some() {
+            syn_err!("`transparent` requires exactly one field that is not skipped");
+        }
+        found = Some((field, field_attr));
+    }
+
+    match found {
+        Some(found) => Ok(found),
+        None => syn_err!("`transparent` requires exactly one field that is not skipped"),
     }
 }

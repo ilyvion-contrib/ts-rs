@@ -191,6 +191,10 @@ impl_parse! {
         "borrow" => {
             parse_optional_assign_str(input)?;
         },
+        // only affects deserialization, the serialized form ts-rs describes is unchanged
+        "deserialize_with" => {
+            parse_assign_str(input)?;
+        },
         "with" | "serialize_with" => {
             parse_assign_str(input)?;
             out.0.using_serde_with = true;
@@ -303,5 +307,24 @@ mod tests {
         for item in &items {
             validate(item).unwrap();
         }
+    }
+
+    #[test]
+    fn deserialize_with_is_accepted_without_a_ts_override() {
+        let item: ItemStruct = parse_quote! {
+            struct A {
+                #[serde(default, deserialize_with = "custom")]
+                a: Option<i32>,
+            }
+        };
+
+        let field = item.fields.iter().next().unwrap();
+        let warnings_before = crate::utils::warning::emitted();
+        let attr = FieldAttr::from_attrs(&field.attrs).unwrap();
+
+        assert_eq!(crate::utils::warning::emitted(), warnings_before);
+        attr.assert_validity(field).unwrap();
+        assert!(!attr.using_serde_with);
+        assert!(attr.has_default);
     }
 }

@@ -180,6 +180,17 @@ pub(crate) mod warning {
 
     use termcolor::{BufferWriter, Color, ColorChoice, ColorSpec, WriteColor};
 
+    #[cfg(test)]
+    thread_local! {
+        static EMITTED: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    }
+
+    /// Number of warnings printed on the current thread.
+    #[cfg(test)]
+    pub fn emitted() -> usize {
+        EMITTED.with(std::cell::Cell::get)
+    }
+
     // Sadly, it is impossible to raise a warning in a proc macro.
     // This function prints a message which looks like a compiler warning.
     #[allow(unused)]
@@ -188,6 +199,9 @@ pub(crate) mod warning {
         content: impl Display,
         note: impl Display,
     ) -> std::io::Result<()> {
+        #[cfg(test)]
+        EMITTED.with(|count| count.set(count.get() + 1));
+
         let make_color = |color: Color, bold: bool| {
             let mut spec = ColorSpec::new();
             spec.set_fg(Some(color)).set_bold(bold).set_intense(true);

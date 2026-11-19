@@ -28,6 +28,8 @@ pub struct StructAttr {
     pub optional_fields: Optional,
     // whether the wire format comes from another type through #[serde(from/try_from/into)]
     pub using_serde_conversion: bool,
+    // whether the struct is serialized as its single non-skipped field through #[serde(transparent)]
+    pub transparent: bool,
 }
 
 impl StructAttr {
@@ -99,6 +101,7 @@ impl Attr for StructAttr {
             },
             optional_fields: self.optional_fields.or(other.optional_fields),
             using_serde_conversion: self.using_serde_conversion || other.using_serde_conversion,
+            transparent: self.transparent || other.transparent,
         }
     }
 
@@ -140,6 +143,10 @@ impl Attr for StructAttr {
             if let Optional::Optional { .. } = self.optional_fields {
                 syn_err!("`optional_fields` is not compatible with `as`");
             }
+        }
+
+        if self.transparent && self.tag.is_some() {
+            syn_err!("`tag` is not compatible with `transparent`");
         }
 
         if !matches!(item, Fields::Named(_)) && self.tag.is_some() {
@@ -192,6 +199,7 @@ impl_parse! {
             parse_assign_str(input)?;
             out.0.using_serde_conversion = true;
         },
+        "transparent" => out.0.transparent = true,
     }
 }
 
@@ -237,5 +245,30 @@ mod tests {
         for item in &items {
             validate(item).unwrap();
         }
+    }
+
+    #[test]
+    fn transparent_is_parsed_without_a_warning() {
+        let item: ItemStruct = parse_quote! { #[serde(transparent)] struct A(i32); };
+
+        let warnings_before = crate::utils::warning::emitted();
+        let attr = StructAttr::from_attrs(&item.attrs).unwrap();
+
+        assert_eq!(crate::utils::warning::emitted(), warnings_before);
+        assert!(attr.transparent);
+    }
+
+    #[test]
+    fn transparent_is_incompatible_with_tag() {
+        let item: ItemStruct = parse_quote! {
+            #[serde(transparent, tag = "kind")]
+            struct A { a: i32 }
+        };
+
+        let error = validate(&item).unwrap_err().to_string();
+        assert!(
+            error.contains("`tag` is not compatible with `transparent`"),
+            "{error}"
+        );
     }
 }

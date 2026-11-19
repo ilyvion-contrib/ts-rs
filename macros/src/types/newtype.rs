@@ -1,5 +1,5 @@
 use quote::quote;
-use syn::{Expr, FieldsUnnamed, Result};
+use syn::{Expr, Field, Result};
 
 use crate::{
     attr::{Attr, ContainerAttr, FieldAttr, StructAttr},
@@ -7,14 +7,13 @@ use crate::{
     DerivedTS,
 };
 
+/// Derives a type that is represented by the type of its single field `inner`.
 pub(crate) fn newtype(
     attr: &StructAttr,
     ts_name: Expr,
-    fields: &FieldsUnnamed,
+    inner: &Field,
+    field_attr: FieldAttr,
 ) -> Result<DerivedTS> {
-    let inner = fields.unnamed.first().unwrap();
-
-    let field_attr = FieldAttr::from_attrs(&inner.attrs)?;
     field_attr.assert_validity(inner)?;
 
     let crate_rename = attr.crate_rename();
